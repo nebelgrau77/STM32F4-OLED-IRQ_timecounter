@@ -76,6 +76,11 @@ fn main() -> ! {
         let sda = gpiob.pb9.into_alternate_af4().set_open_drain();
         let i2c = I2c::i2c1(dp.I2C1, (scl, sda), 400.khz(), clocks);
 
+        //set up LED
+
+        let gpioa = dp.GPIOA.split();
+        let mut yellow = gpioa.pa1.into_push_pull_output();
+
         
         // Set up the display: using terminal mode with 128x32 display
         
@@ -98,12 +103,14 @@ fn main() -> ! {
         stm32::NVIC::unpend(Interrupt::TIM2);
         unsafe { stm32::NVIC::unmask(Interrupt::TIM2); };
 
-
         
-        loop {
+        // set the counter to some value, in this case 3 minutes
 
-            // display is refreshed every 200 ms
-            
+        free(|cs| ELAPSED.borrow(cs).set(180));
+                
+
+        while free(|cs| ELAPSED.borrow(cs).get()) > 0 {
+
             let mut buffer = ArrayString::<[u8; 64]>::new();
 
             let elapsed = free(|cs| ELAPSED.borrow(cs).get()); 
@@ -121,8 +128,27 @@ fn main() -> ! {
             delay.delay_ms(200_u16);
 
         }
+
+        // display zeros
         
-        
+        let mut buffer = ArrayString::<[u8; 64]>::new();
+
+        let zero: u8 = 0;
+
+        format_time(&mut buffer, zero, zero, zero);
+            
+        disp.write_str(buffer.as_str());
+            
+        // blink LED three times, then leave it on
+
+        for a in 0..3 {
+            yellow.set_high().unwrap();
+            delay.delay_ms(200_u16);
+            yellow.set_low().unwrap();
+            delay.delay_ms(200_u16);
+        }
+            yellow.set_high().unwrap();
+
     }
 
     loop {}
@@ -133,7 +159,6 @@ fn main() -> ! {
 // the ELAPSED value gets updated every second when the interrupt fires
 
 fn TIM2() {
-
      
     free(|cs| {
         stm32::NVIC::unpend(Interrupt::TIM2);
@@ -141,15 +166,12 @@ fn TIM2() {
             tim2.clear_interrupt(Event::TimeOut);
         }
 
-        ELAPSED.borrow(cs).set(ELAPSED.borrow(cs).get() + 1);
-
+        ELAPSED.borrow(cs).set(ELAPSED.borrow(cs).get() - 1);
         
     });
-
     
 }
 
 fn format_time(buf: &mut ArrayString<[u8; 64]>, hours: u8, minutes: u8, seconds: u8) {
     fmt::write(buf, format_args!("    {:02}:{:02}:{:02}                                                    ", hours, minutes, seconds)).unwrap();
 }
-
