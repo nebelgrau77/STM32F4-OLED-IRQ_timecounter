@@ -1,0 +1,32 @@
+[package]
+name = "timecounter"
+version = "0.1.0"
+authors = ["nebelgrau"]
+edition = "2018"
+
+[dependencies]
+
+cortex-m = "0.6.1"
+cortex-m-rt = "0.6.10"
+
+stm32f4xx-hal = {version = "0.6.0", features = ["stm32f411"]}
+stm32f4 = {version = "0.8.0", features = ["stm32f411", "rt"]}
+
+
+
+
+nb = "0.1.2"
+bare-metal = {version = "0.2.5", features = ["const-fn"]}
+embedded-hal = {version = "0.2.3", features = ["unproven"]}
+
+panic-halt = "0.2.0"
+
+ssd1306 = {version ="0.3.0-alpha.4", features=["graphics"]}
+embedded-graphics = "0.6.0-alpha.3"
+
+arrayvec = {version = "0.5.1",default-features = false}
+
+[profile.release]
+debug = true
+lto = true
+opt-level = "z"
