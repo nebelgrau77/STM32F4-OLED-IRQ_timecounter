@@ -133,17 +133,20 @@ fn main() -> ! {
 // the ELAPSED value gets updated every second when the interrupt fires
 
 fn TIM2() {
+
+     
     free(|cs| {
         stm32::NVIC::unpend(Interrupt::TIM2);
         if let Some(ref mut tim2) = TIMER_TIM2.borrow(cs).borrow_mut().deref_mut() {
             tim2.clear_interrupt(Event::TimeOut);
         }
 
-        let cell = ELAPSED.borrow(cs);
-        let val = cell.get();
-        cell.replace(val + 1);
+        ELAPSED.borrow(cs).set(ELAPSED.borrow(cs).get() + 1);
+
         
     });
+
+    
 }
 
 fn format_time(buf: &mut ArrayString<[u8; 64]>, hours: u8, minutes: u8, seconds: u8) {
