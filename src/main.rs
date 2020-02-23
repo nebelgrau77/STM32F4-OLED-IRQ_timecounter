@@ -130,22 +130,23 @@ fn main() -> ! {
             unsafe {
                 nvic.set_priority(Interrupt::TIM2, 2);
                 cortex_m::peripheral::NVIC::unmask(Interrupt::TIM2);
-                nvic.set_priority(Interrupt::EXTI15_10, 1);
-                cortex_m::peripheral::NVIC::unmask(Interrupt::EXTI15_10);
+                nvic.set_priority(Interrupt::EXTI0, 1);
+                cortex_m::peripheral::NVIC::unmask(Interrupt::EXTI0);
             }
             cortex_m::peripheral::NVIC::unpend(Interrupt::TIM2);
-            cortex_m::peripheral::NVIC::unpend(Interrupt::EXTI15_10);
+            cortex_m::peripheral::NVIC::unpend(Interrupt::EXTI0);
                     
         // set the counter to some value, in this case 3 minutes
         // count down as long as the value > 0
         // set display to zero, blink the LED a few times
         // leave the LED on for three seconds
 
-        loop {
+        
 
+        loop {
+           
             free(|cs| SET.borrow(cs).set(180));
             free(|cs| ELAPSED.borrow(cs).set(SET.borrow(cs).get()));
-
 
             while free(|cs| ELAPSED.borrow(cs).get()) > 0 {
 
@@ -226,7 +227,7 @@ fn TIM2() {
 
 #[interrupt]
 
-fn EXTI15_10() {
+fn EXTI0() {
 
     // Enter critical section
     free(|cs| {
@@ -236,10 +237,14 @@ fn EXTI15_10() {
             EXTI.borrow(cs).borrow_mut().deref_mut()) {
          
             btn.clear_interrupt_pending_bit(exti);
+
+            let timeset = SET.borrow(cs).get();
+
+            ELAPSED.borrow(cs).replace(timeset);
+
         }
 
-        ELAPSED.borrow(cs).set(SET.borrow(cs).get());            
-
+        
     });
 
 }
