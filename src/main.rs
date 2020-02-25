@@ -3,8 +3,7 @@
 //! Ported to STMF411
 //! 
 //! Constantly update a counter and display it as elapsed time
-//! 
-//! 
+//! //! 
 //! This example is for the STM32F411CEU6 board board using I2C1.
 //!
 //! Wiring connections are as follows for a 128x32 unbranded display:
@@ -17,6 +16,12 @@
 //! SCL -> PB8
 //! ```
 //!
+//! LED: 
+//! anode -> PA1
+//! cathode -> GND through a 220 Ohm (or bigger) resistor
+//! 
+//! BUTTON: built-in button on PA0
+//! 
 //! Best results when using `--release`.
 
 #![no_std]
@@ -90,7 +95,7 @@ fn main() -> ! {
 
         let gpioa = dp.GPIOA.split();
         let mut yellow = gpioa.pa1.into_push_pull_output();
-
+        
         //set up the on-board button
 
         let mut board_btn = gpioa.pa0.into_pull_up_input();
@@ -140,9 +145,7 @@ fn main() -> ! {
         // count down as long as the value > 0
         // set display to zero, blink the LED a few times
         // leave the LED on for three seconds
-
         
-
         loop {
            
             free(|cs| SET.borrow(cs).set(180));
@@ -198,7 +201,7 @@ fn main() -> ! {
             delay.delay_ms(3000_u16);
 
             yellow.toggle();
-
+        
         }
 
     }
@@ -250,6 +253,6 @@ fn EXTI0() {
 }
 
 fn format_time(buf: &mut ArrayString<[u8; 64]>, e_hrs: u8, e_mins: u8, e_secs: u8, s_hrs: u8, s_mins: u8, s_secs: u8) {
-    fmt::write(buf, format_args!("    {:02}:{:02}:{:02}                                        {:02}:{:02}:{:02}    ", e_hrs, e_mins, e_secs, 
-s_hrs, s_mins, s_secs)).unwrap();
+    fmt::write(buf, format_args!("    {:02}:{:02}:{:02}                                        {:02}:{:02}:{:02}    ",
+    e_hrs, e_mins, e_secs, s_hrs, s_mins, s_secs)).unwrap();
 }

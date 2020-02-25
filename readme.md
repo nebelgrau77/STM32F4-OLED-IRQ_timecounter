@@ -11,4 +11,4 @@ Pressing the on-board button resets the timer back to 180 seconds.
 Future developments:
 
 - time to be set with ADC + potentiometer
-- improved clock start/stop/reset with a button
+- clock start/stop/reset with a button
