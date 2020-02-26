@@ -13,4 +13,4 @@ Pressing the on-board button resets the timer back to the set time.
 Future developments:
 
 - improve the ADC reading (currently the values are constantly oscillating, have to be averaged somehow)
-- clock start/stop/reset with a button
+- time to be set with ADC + potentiometer

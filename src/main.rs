@@ -14,6 +14,7 @@
 //! 
 //! Time update is controlled by TIM2 timer, firing every second. 
 //! Display is updated every 200 ms with less precise SysClock.
+//! 
 //! Time to count down from is set in 60-second intervals with a potentiometer/ADC
 //! 
 //! Further developments:
@@ -32,7 +33,6 @@
 //! BUTTON: built-in button on PA0
 //! 
 //! ADC: PA3
-//! 
 //! 
 //! Best results when using `--release`.
 
@@ -89,7 +89,6 @@ static TIMER_TIM3: Mutex<RefCell<Option<Timer<stm32::TIM3>>>> = Mutex::new(RefCe
 static GADC: Mutex<RefCell<Option<Adc<stm32::ADC1>>>> = Mutex::new(RefCell::new(None));
 static ANALOG: Mutex<RefCell<Option<PA3<Analog>>>> = Mutex::new(RefCell::new(None));
 
-
 #[entry]
 fn main() -> ! {
     if let (Some(mut dp), Some(cp)) = (
@@ -103,8 +102,8 @@ fn main() -> ! {
         // set up clocks
         let rcc = dp.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(48.mhz()).freeze();
-        
-        // Set up I2C - SCL is PB8 and SDA is PB9; they are set to Alternate Function 4, open drain
+
+      // Set up I2C - SCL is PB8 and SDA is PB9; they are set to Alternate Function 4, open drain
         let gpiob = dp.GPIOB.split();
         let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
         let sda = gpiob.pb9.into_alternate_af4().set_open_drain();
@@ -135,8 +134,6 @@ fn main() -> ! {
             *ANALOG.borrow(cs).borrow_mut() = Some(pa3);
         });
 
-
-        
         // Set up the display: using terminal mode with 128x32 display
         let mut disp: TerminalMode<_> = SSD1306Builder::new().size(DisplaySize::Display128x32).connect_i2c(i2c).into();
         
@@ -146,7 +143,9 @@ fn main() -> ! {
         // set up delay provider
         let mut delay = Delay::new(cp.SYST, clocks);
 
+
         // set up timers and external interrupt
+
         let mut timer = Timer::tim2(dp.TIM2, Hertz(1), clocks);
         timer.listen(Event::TimeOut);
 
@@ -167,7 +166,7 @@ fn main() -> ! {
             unsafe {
                 nvic.set_priority(Interrupt::TIM2, 1);
                 cortex_m::peripheral::NVIC::unmask(Interrupt::TIM2);
-                
+
                 nvic.set_priority(Interrupt::EXTI0, 3);
                 cortex_m::peripheral::NVIC::unmask(Interrupt::EXTI0);
 
@@ -183,15 +182,10 @@ fn main() -> ! {
         // set the counter to some value, in this case 3 minutes
         // count down as long as the value > 0
         
+
         free(|cs| SET.borrow(cs).set(180));
 
         loop {
-           
-            // let sample = adc.convert(&pa3, SampleTime::Cycles_144);
-           
-            // ADC is set to 6bit resolution, so 0-63
-            // time can be set up to over 30 minutes in 30 second intervals
-            // free(|cs| SET.borrow(cs).set(sample*30));
             
             free(|cs| ELAPSED.borrow(cs).set(SET.borrow(cs).get()));
 
@@ -208,10 +202,11 @@ fn main() -> ! {
 
                 let (e_hrs, e_mins, e_secs) = time_digits(elapsed);
                 let (s_hrs, s_mins, s_secs) = time_digits(set);
-
-                // format the current time values and write them on the display
                 
-                format_time(&mut buffer, e_hrs, e_mins, e_secs, s_hrs, s_mins, s_secs);
+                // convert the seconds to hh:mm:ss format
+
+                format_time(&mut buffer, elapsed, set);
+
                 
                 disp.write_str(buffer.as_str()).unwrap();
                 
@@ -223,13 +218,13 @@ fn main() -> ! {
             
             let mut buffer = ArrayString::<[u8; 64]>::new();
 
-            let zero: u8 = 0;
+            let zero: u16 = 0;
 
             let set = free(|cs| SET.borrow(cs).get()); 
 
             let (s_hrs, s_mins, s_secs) = time_digits(set);
 
-            format_time(&mut buffer, zero, zero, zero, s_hrs, s_mins, s_secs);
+            format_time(&mut buffer, zero, set);
                 
             disp.write_str(buffer.as_str()).unwrap();
                 
@@ -301,6 +296,7 @@ fn EXTI0() {
 
 }
 
+
 #[interrupt]
 
 // the SET value gets updated every time the interrupt fires 
@@ -330,16 +326,20 @@ fn TIM3() {
     
 }
 
+
 // helper function for the display
 // in TerminalMode there are 64 characters in 4 lines (128x32 display, 8x8 characters)
 // to avoid the content being moved accross the display with every update
 // the buffer content must always be 64 characters long
 
-fn format_time(buf: &mut ArrayString<[u8; 64]>, e_hrs: u8, e_mins: u8, e_secs: u8, s_hrs: u8, s_mins: u8, s_secs: u8) {
+fn format_time(buf: &mut ArrayString<[u8; 64]>, elapsed: u16, set: u16) {
+    
+    let (e_hrs, e_mins, e_secs) = time_digits(elapsed);
+    let (s_hrs, s_mins, s_secs) = time_digits(set);
+
     fmt::write(buf, format_args!("    {:02}:{:02}:{:02}                                        {:02}:{:02}:{:02}    ",
     e_hrs, e_mins, e_secs, s_hrs, s_mins, s_secs)).unwrap();
 }
-
 
 // helper function to convert seconds to hours, minutes and seconds    
 
