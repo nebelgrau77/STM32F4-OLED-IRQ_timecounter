@@ -6,7 +6,7 @@
 //! 
 //! Uses an OLED SSD1306 display with I2C interface, an LED and a button.
 //! 
-//! It counts down from 180 seconds, then blinks the LED a few times, then goes back to countdown.
+//! It counts down to zero, then blinks the LED a few times, then goes back to countdown.
 //! 
 //! Pressing the button resets the counter back to 180 seconds.
 //! 
@@ -14,11 +14,12 @@
 //! 
 //! Time update is controlled by TIM2 timer, firing every second. 
 //! Display is updated every 200 ms with less precise SysClock.
+//! Time to count down from is set in 60-second intervals with a potentiometer/ADC
 //! 
 //! Further developments:
 //! 
-//! - use ADC to set the counter time
 //! - use button to stop/start/reset the counter
+//! - improve the ADC reading (currently values are fluctuating a little)
 //! 
 //! Connections:
 //! 
@@ -29,7 +30,9 @@
 //! LED: PA1
 //! 
 //! BUTTON: built-in button on PA0
-//! //! 
+//! 
+//! ADC: PA3
+//! 
 //! 
 //! Best results when using `--release`.
 
@@ -121,6 +124,7 @@ fn main() -> ! {
 
         let adcconfig = AdcConfig::default().resolution(Resolution::Six);
         let adc = Adc::adc1(dp.ADC1, true, adcconfig);
+        
         let pa3 = gpioa.pa3.into_analog();
 
 
@@ -179,6 +183,8 @@ fn main() -> ! {
         // set the counter to some value, in this case 3 minutes
         // count down as long as the value > 0
         
+        free(|cs| SET.borrow(cs).set(180));
+
         loop {
            
             // let sample = adc.convert(&pa3, SampleTime::Cycles_144);
@@ -186,8 +192,6 @@ fn main() -> ! {
             // ADC is set to 6bit resolution, so 0-63
             // time can be set up to over 30 minutes in 30 second intervals
             // free(|cs| SET.borrow(cs).set(sample*30));
-            
-            free(|cs| SET.borrow(cs).set(180));
             
             free(|cs| ELAPSED.borrow(cs).set(SET.borrow(cs).get()));
 
@@ -297,15 +301,10 @@ fn EXTI0() {
 
 }
 
-
-
 #[interrupt]
 
 // the SET value gets updated every time the interrupt fires 
 // it is read from ADC on pin PA3
-
-// currently NOT working
-
 
 fn TIM3() {
         
@@ -318,18 +317,18 @@ fn TIM3() {
         {
             tim3.clear_interrupt(Event::TimeOut);
 
-            let sample = adc.convert(analog, SampleTime::Cycles_144);
+            let sample = adc.convert(analog, SampleTime::Cycles_480);
 
-            SET.borrow(cs).replace(sample*30);
+            // bitshift to the right by 1 bit, converting the result to 0-31 values
+            // so the timer can be set in 60-second intervals up to 30 minutes
+
+            SET.borrow(cs).replace((sample>>1)*60);
         
         }
         
     });
     
 }
-
-
-
 
 // helper function for the display
 // in TerminalMode there are 64 characters in 4 lines (128x32 display, 8x8 characters)
