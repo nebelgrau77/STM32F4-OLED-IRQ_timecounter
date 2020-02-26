@@ -58,17 +58,15 @@ use core::cell::{Cell, RefCell};
 use stm32f4::stm32f411::interrupt;
 
 use ssd1306::{prelude::*, Builder as SSD1306Builder};
-use ssd1306::{mode::displaymode::DisplayModeTrait, prelude::*, Builder};
 
 use crate::hal::{
     prelude::*,
-    rcc::{Rcc, Clocks},
     gpio::{gpioa::PA0, Edge, ExtiPin, Input, PullUp},
     i2c::I2c,
     stm32,
     timer::{Timer, Event},
     delay::Delay,
-    time::{Hertz, MilliSeconds},
+    time::Hertz,
     stm32::{Interrupt,EXTI},
         
 };
