@@ -46,7 +46,6 @@ extern crate panic_halt;
 
 use cortex_m_rt::entry;
 use cortex_m::interrupt::{Mutex, free};
-use cortex_m::peripheral::Peripherals as c_m_Peripherals;
 
 use core::fmt;
 use core::fmt::Write;
@@ -58,11 +57,9 @@ use core::cell::{Cell, RefCell};
 use stm32f4::stm32f411::interrupt;
 
 use ssd1306::{prelude::*, Builder as SSD1306Builder};
-//use ssd1306::{mode::displaymode::DisplayModeTrait, prelude::*, Builder};
 
 use crate::hal::{
     prelude::*,
-    //rcc::{Rcc, Clocks},
     gpio::{gpioa::{PA0, PA3}, Edge, ExtiPin, Input, PullUp, Analog},
     i2c::I2c,
     stm32,
@@ -70,7 +67,7 @@ use crate::hal::{
     delay::Delay,
     time::Hertz,
     stm32::{Interrupt,EXTI},
-    adc::{Adc, config::AdcConfig, config::SampleTime}
+    adc::{Adc, config::{AdcConfig, SampleTime, Resolution}}
 };
 
 
@@ -84,10 +81,11 @@ static EXTI: Mutex<RefCell<Option<EXTI>>> = Mutex::new(RefCell::new(None));
 static BUTTON: Mutex<RefCell<Option<PA0<Input<PullUp>>>>> = Mutex::new(RefCell::new(None));
 
 // interrupt and peripheral for ADC
-static TIMER_TIM5: Mutex<RefCell<Option<Timer<stm32::TIM5>>>> = Mutex::new(RefCell::new(None));
+static TIMER_TIM3: Mutex<RefCell<Option<Timer<stm32::TIM3>>>> = Mutex::new(RefCell::new(None));
 
 static GADC: Mutex<RefCell<Option<Adc<stm32::ADC1>>>> = Mutex::new(RefCell::new(None));
-static ANALOG: Mutex<RefCell<Option<PA3<Input<Analog>>>>> = Mutex::new(RefCell::new(None));
+static ANALOG: Mutex<RefCell<Option<PA3<Analog>>>> = Mutex::new(RefCell::new(None));
+
 
 #[entry]
 fn main() -> ! {
@@ -102,11 +100,7 @@ fn main() -> ! {
         // set up clocks
         let rcc = dp.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(48.mhz()).freeze();
-
-        //let mut flash = p.FLASH.constrain();
-        //let adcclock = rcc.cfgr.adcclk(2.mhz()).freeze(&mut flash.acr);
-
-
+        
         // Set up I2C - SCL is PB8 and SDA is PB9; they are set to Alternate Function 4, open drain
         let gpiob = dp.GPIOB.split();
         let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
@@ -123,14 +117,22 @@ fn main() -> ! {
         board_btn.enable_interrupt(&mut dp.EXTI);
         board_btn.trigger_on_edge(&mut dp.EXTI, Edge::FALLING);
 
-
         // Set up ADC
-        
-        let mut adc = Adc::adc1(dp.ADC1, true, AdcConfig::default());
-        let pa3 = gpioa.pa3.into_analog();
-        adc.enable();
-                        
 
+        let adcconfig = AdcConfig::default().resolution(Resolution::Six);
+        let adc = Adc::adc1(dp.ADC1, true, adcconfig);
+        let pa3 = gpioa.pa3.into_analog();
+
+
+        // move the PA3 pin and the ADC into the 'global storage'
+
+        free(|cs| {
+            *GADC.borrow(cs).borrow_mut() = Some(adc);
+            *ANALOG.borrow(cs).borrow_mut() = Some(pa3);
+        });
+
+
+        
         // Set up the display: using terminal mode with 128x32 display
         let mut disp: TerminalMode<_> = SSD1306Builder::new().size(DisplaySize::Display128x32).connect_i2c(i2c).into();
         
@@ -144,16 +146,16 @@ fn main() -> ! {
         let mut timer = Timer::tim2(dp.TIM2, Hertz(1), clocks);
         timer.listen(Event::TimeOut);
 
-        let mut adctimer = Timer::tim5(dp.TIM5, Hertz(100), clocks); //adc update every 10ms
+        let mut adctimer = Timer::tim3(dp.TIM3, Hertz(10), clocks); //adc update every 100ms
         adctimer.listen(Event::TimeOut);
         
         let exti = dp.EXTI;
 
         free(|cs| {
             TIMER_TIM2.borrow(cs).replace(Some(timer));
+            TIMER_TIM3.borrow(cs).replace(Some(adctimer));
             EXTI.borrow(cs).replace(Some(exti));
             BUTTON.borrow(cs).replace(Some(board_btn));
-            TIMER_TIM5.borrow(cs).replace(Some(adctimer));
         });
 
 
@@ -161,16 +163,17 @@ fn main() -> ! {
             unsafe {
                 nvic.set_priority(Interrupt::TIM2, 1);
                 cortex_m::peripheral::NVIC::unmask(Interrupt::TIM2);
-                nvic.set_priority(Interrupt::EXTI0, 2);
+                
+                nvic.set_priority(Interrupt::EXTI0, 3);
                 cortex_m::peripheral::NVIC::unmask(Interrupt::EXTI0);
 
-                nvic.set_priority(Interrupt::TIM5, 3);
-                cortex_m::peripheral::NVIC::unmask(Interrupt::TIM5);
+                nvic.set_priority(Interrupt::TIM3, 2);
+                cortex_m::peripheral::NVIC::unmask(Interrupt::TIM3);
 
             }
             
             cortex_m::peripheral::NVIC::unpend(Interrupt::TIM2);
-            cortex_m::peripheral::NVIC::unpend(Interrupt::TIM5);
+            cortex_m::peripheral::NVIC::unpend(Interrupt::TIM3);
             cortex_m::peripheral::NVIC::unpend(Interrupt::EXTI0);
                     
         // set the counter to some value, in this case 3 minutes
@@ -178,7 +181,14 @@ fn main() -> ! {
         
         loop {
            
+            // let sample = adc.convert(&pa3, SampleTime::Cycles_144);
+           
+            // ADC is set to 6bit resolution, so 0-63
+            // time can be set up to over 30 minutes in 30 second intervals
+            // free(|cs| SET.borrow(cs).set(sample*30));
+            
             free(|cs| SET.borrow(cs).set(180));
+            
             free(|cs| ELAPSED.borrow(cs).set(SET.borrow(cs).get()));
 
             while free(|cs| ELAPSED.borrow(cs).get()) > 0 {
@@ -199,9 +209,9 @@ fn main() -> ! {
                 
                 format_time(&mut buffer, e_hrs, e_mins, e_secs, s_hrs, s_mins, s_secs);
                 
-                disp.write_str(buffer.as_str());
+                disp.write_str(buffer.as_str()).unwrap();
                 
-                delay.delay_ms(200_u16);
+                //delay.delay_ms(200_u16);
 
             }
 
@@ -217,18 +227,18 @@ fn main() -> ! {
 
             format_time(&mut buffer, zero, zero, zero, s_hrs, s_mins, s_secs);
                 
-            disp.write_str(buffer.as_str());
+            disp.write_str(buffer.as_str()).unwrap();
                 
             // blink LED a few times, then leave it on
 
-            for b in 0..11 { //odd number to keep the LED on after it's done blinking
-                yellow.toggle();
+            for _ in 0..11 { //odd number to keep the LED on after it's done blinking
+                yellow.toggle().unwrap();
                 delay.delay_ms(100_u16);
             }
 
             delay.delay_ms(3000_u16);
 
-            yellow.toggle();
+            yellow.toggle().unwrap();
         
         }
 
@@ -296,27 +306,27 @@ fn EXTI0() {
 
 // currently NOT working
 
+
 fn TIM3() {
         
     free(|cs| {
-        stm32::NVIC::unpend(Interrupt::TIM5);
-        if let (Some(ref mut tim5), Some(ref mut adc), Some(ref mut analog)) = (
-        TIMER_TIM5.borrow(cs).borrow_mut().deref_mut(),
+        stm32::NVIC::unpend(Interrupt::TIM3);
+        if let (Some(ref mut tim3), Some(ref mut adc), Some(ref mut analog)) = (
+        TIMER_TIM3.borrow(cs).borrow_mut().deref_mut(),
         GADC.borrow(cs).borrow_mut().deref_mut(),
         ANALOG.borrow(cs).borrow_mut().deref_mut())
         {
-            tim5.clear_interrupt(Event::TimeOut);
+            tim3.clear_interrupt(Event::TimeOut);
 
-            let sample = adc.convert(&analog, SampleTime::Cycles_480);
+            let sample = adc.convert(analog, SampleTime::Cycles_144);
 
-            SET.borrow(cs).replace(sample);
+            SET.borrow(cs).replace(sample*30);
         
         }
         
     });
     
 }
-
 
 
 
