@@ -73,8 +73,8 @@ use crate::hal::{
 
 
 // create two globally accessible values for set and elapsed time
-static SET: Mutex<Cell<u32>> = Mutex::new(Cell::new(0u32));
-static ELAPSED: Mutex<Cell<u32>> = Mutex::new(Cell::new(0u32));
+static SET: Mutex<Cell<u16>> = Mutex::new(Cell::new(0u16));
+static ELAPSED: Mutex<Cell<u16>> = Mutex::new(Cell::new(0u16));
 
 // globally accessible interrupts and peripherals: timer, external interrupt and button
 static TIMER_TIM2: Mutex<RefCell<Option<Timer<stm32::TIM2>>>> = Mutex::new(RefCell::new(None));
@@ -163,12 +163,7 @@ fn main() -> ! {
 
                 // convert the seconds to hh:mm:ss format
 
-                let (e_hrs, e_mins, e_secs) = time_digits(elapsed);
-                let (s_hrs, s_mins, s_secs) = time_digits(set);
-
-                // format the current time values and write them on the display
-                
-                format_time(&mut buffer, e_hrs, e_mins, e_secs, s_hrs, s_mins, s_secs);
+                format_time(&mut buffer, elapsed, set);
                 
                 disp.write_str(buffer.as_str());
                 
@@ -180,13 +175,11 @@ fn main() -> ! {
             
             let mut buffer = ArrayString::<[u8; 64]>::new();
 
-            let zero: u8 = 0;
+            let zero: u16 = 0;
 
             let set = free(|cs| SET.borrow(cs).get()); 
 
-            let (s_hrs, s_mins, s_secs) = time_digits(set);
-
-            format_time(&mut buffer, zero, zero, zero, s_hrs, s_mins, s_secs);
+            format_time(&mut buffer, zero, set);
                 
             disp.write_str(buffer.as_str());
                 
@@ -263,15 +256,19 @@ fn EXTI0() {
 // to avoid the content being moved accross the display with every update
 // the buffer content must always be 64 characters long
 
-fn format_time(buf: &mut ArrayString<[u8; 64]>, e_hrs: u8, e_mins: u8, e_secs: u8, s_hrs: u8, s_mins: u8, s_secs: u8) {
+
+fn format_time(buf: &mut ArrayString<[u8; 64]>, elapsed: u16, set: u16) {
+    
+    let (e_hrs, e_mins, e_secs) = time_digits(elapsed);
+    let (s_hrs, s_mins, s_secs) = time_digits(set);
+
     fmt::write(buf, format_args!("    {:02}:{:02}:{:02}                                        {:02}:{:02}:{:02}    ",
     e_hrs, e_mins, e_secs, s_hrs, s_mins, s_secs)).unwrap();
 }
 
-
 // helper function to convert seconds to hours, minutes and seconds    
 
-fn time_digits(time: u32) -> (u8, u8, u8) {
+fn time_digits(time: u16) -> (u8, u8, u8) {
     
     let hours = time / 3600;
     let minutes = time / 60;
