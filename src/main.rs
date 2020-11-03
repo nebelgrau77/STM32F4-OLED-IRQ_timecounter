@@ -200,11 +200,17 @@ fn main() -> ! {
 
                 // convert the seconds to hh:mm:ss format
 
+                let (e_hrs, e_mins, e_secs) = time_digits(elapsed);
+                let (s_hrs, s_mins, s_secs) = time_digits(set);
+                
+                // convert the seconds to hh:mm:ss format
+
                 format_time(&mut buffer, elapsed, set);
+
                 
                 disp.write_str(buffer.as_str()).unwrap();
                 
-                delay.delay_ms(200_u16);
+                //delay.delay_ms(200_u16);
 
             }
 
@@ -215,6 +221,8 @@ fn main() -> ! {
             let zero: u16 = 0;
 
             let set = free(|cs| SET.borrow(cs).get()); 
+
+            let (s_hrs, s_mins, s_secs) = time_digits(set);
 
             format_time(&mut buffer, zero, set);
                 
